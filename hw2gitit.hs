@@ -20,6 +20,7 @@ import Data.List
 import Text.HTML.TagSoup
 import Data.FileStore
 import Codec.Binary.UTF8.String
+import Text.Printf
 import Text.Pandoc
 import Text.Pandoc.Shared (stringify)
 import System.Environment
@@ -47,11 +48,10 @@ wikiHostNoWWW = "https://nixos.org"
 wikiHost :: String
 wikiHost = wikiHostNoWWW
 
+wPrefix :: String
+wPrefix = "/w"
 wikiPrefix :: String
 wikiPrefix = "/wiki"
-
-wikiBase :: String
-wikiBase = wikiHostNoWWW ++ wikiPrefix
 
 -- a local list of resources that have been included,
 -- to speed things up
@@ -92,10 +92,10 @@ openURL' url = do
   return src
 
 indices :: [String]
-indices =  [ wikiBase ++ "/Special:Allpages/%24"
-           , wikiBase ++ "/Special:Allpages/G"
-           , wikiBase ++ "/Special:Allpages/L"
-           , wikiBase ++ "/Special:Allpages/U"
+indices =  [ wikiHost ++ wikiPrefix ++ "/Special:Allpages/%24"
+           , wikiHost ++ wikiPrefix ++ "/Special:Allpages/G"
+           , wikiHost ++ wikiPrefix ++ "/Special:Allpages/L"
+           , wikiHost ++ wikiPrefix ++ "/Special:Allpages/U"
            ]
 
 -- get list of pages listed on index URL
@@ -166,21 +166,23 @@ toVersion ts =
 -- add it to the repository.
 doPage :: FileStore -> (String,String) -> IO ()
 doPage fs (page',page) = do
-  src <- openURL' $ wikiBase ++ "/index.php?title=" ++ page ++ "&limit=500&action=history"
+  let pageHistoryUrl = wikiHost ++ wPrefix ++ "/index.php?title=" ++ page ++ "&limit=500&action=history"
+  src <- openURL' $ pageHistoryUrl
   let tags = takeWhile (~/= TagClose "ul")
            $ dropWhile (~/= TagOpen "ul" [("id","pagehistory")])
            $ parseTags $ decodeString src
   let lis = partitions (~== TagOpen "li" []) tags
   let versions = sortBy (comparing vId) $ map toVersion lis
+  printf ";  %s %s\n%s\n" page pageHistoryUrl (show versions)
   -- let versions = [ Version {vId=1308, vUser="Ashley Y",vDate="23:54, 4 January 2006",vDescription = "Initial commit"}
   mapM_ (doPageVersion fs (page',page)) versions
 
 doPageVersion :: FileStore -> (String,String) -> Version -> IO ()
 doPageVersion fs (page',page) version = do
   let fname = page' ++ ".page"
-
   -- first, check mediawiki source to make sure it's not a redirect page
-  mwsrc <- openURL' $ wikiBase ++ "/index.php?title=" ++ page ++ "&action=edit"
+      pageVersionUrl = wikiHost ++ wPrefix ++ "/index.php?title=" ++ page ++ "&action=edit"
+  mwsrc <- openURL' pageVersionUrl
   let redir = case (drop 1 $ dropWhile (~/= TagOpen "textarea" [("id","wpTextbox1")])
                            $ parseTags $ decodeString mwsrc) of
                   (TagText ('#':'r':'e':'d':'i':'r':'e':'c':'t':' ':'[':'[':xs):_) ->
@@ -192,7 +194,7 @@ doPageVersion fs (page',page) version = do
                   _ -> ""
 
   src <- if null redir
-            then openURL' $ wikiBase ++ "/" ++ page ++
+            then openURL' $ wikiHost ++ wPrefix ++ "/" ++ page ++
                     if vId version > 0
                        then "?oldid=" ++ printf "%06d" (vId version)
                        else ""
@@ -228,6 +230,7 @@ doPageVersion fs (page',page) version = do
   let auth = vUser version
   let descr = vDescription version ++ " (#" ++ show (vId version) ++ ", " ++
                 vDate version ++ ")"
+  printf ";  %s %s %d - %s\n" page (show auth) (length src) pageVersionUrl
   addToWiki fs fname auth descr $
      (if null categories
          then ""
