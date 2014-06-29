@@ -196,7 +196,7 @@ doPageVersion fs (page',page) version = do
                   (TagText ('#':'R':'e':'d':'i':'r':'e':'c':'t':' ':'[':'[':xs):_) ->
                          takeWhile (/=']') xs
                   _ -> ""
-      pageVersionUrl = wikiHost ++ wPrefix ++ "/" ++ page ++
+      pageVersionUrl = wikiHost ++ wPrefix ++ "/index.php?title=" ++ page ++
                          if vId version > 0
                          then "&oldid=" ++ printf "%06d" (vId version)
                          else ""
