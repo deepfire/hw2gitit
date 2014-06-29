@@ -40,9 +40,9 @@ wiki :: FilePath
 wiki = "wiki"
 
 wikiHostWWW :: String
-wikiHostWWW = "http://www.nixos.org"
+wikiHostWWW = "https://www.nixos.org"
 wikiHostNoWWW :: String
-wikiHostNoWWW = "http://nixos.org"
+wikiHostNoWWW = "https://nixos.org"
 wikiHost :: String
 wikiHost = wikiHostNoWWW
 
