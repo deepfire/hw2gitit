@@ -92,7 +92,7 @@ openURL' url = do
             readFile cachename
           else
             openURL url
-  printf "len %d\n" $ length src
+  printf "len %d%s\n" (length src) (if cached then " (cached)" else "")
   unless cached $ writeFile cachename src
   return src
 
