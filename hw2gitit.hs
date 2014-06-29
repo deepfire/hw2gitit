@@ -27,6 +27,7 @@ import System.Directory
 import System.FilePath
 import Data.IORef
 import System.IO.Unsafe
+import Network.HTTP.Conduit
 
 data Version = Version { vId :: Integer
                        , vUser :: String
@@ -71,7 +72,9 @@ main = do
   mapM_ (doPage fs) pagepairs
 
 openURL :: String -> IO String
-openURL x = getResponseBody =<< simpleHTTP (getRequest x)
+openURL x = do
+  byst <- simpleHttp x
+  return $ BC.unpack byst
 
 tr :: Char -> Char -> String -> String
 tr c1 c2 = map (\c -> if c == c1 then c2 else c)
