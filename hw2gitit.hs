@@ -39,17 +39,18 @@ cache = "cache"
 wiki :: FilePath
 wiki = "wiki"
 
-wikiHost :: String
-wikiHost = "https://www.nixos.org"
-
+wikiHostWWW :: String
+wikiHostWWW = "http://www.nixos.org"
 wikiHostNoWWW :: String
-wikiHostNoWWW = "https://nixos.org"
+wikiHostNoWWW = "http://nixos.org"
+wikiHost :: String
+wikiHost = wikiHostNoWWW
 
 wikiPrefix :: String
 wikiPrefix = "/wiki"
 
 wikiBase :: String
-wikiBase = wikiHost ++ wikiPrefix
+wikiBase = wikiHostNoWWW ++ wikiPrefix
 
 -- a local list of resources that have been included,
 -- to speed things up
@@ -291,7 +292,7 @@ handleInlineCode [] = []
 -- adding them to the repository.
 handleLinksImages :: FileStore -> Bool -> Inline -> IO Inline
 handleLinksImages fs insubdir (Link lab (src,tit))
-  | wikiBase `isPrefixOf` src ||
+  | (wikiHost ++ wikiPrefix) `isPrefixOf` src ||
     (wikiHost ++ "/wikiupload") `isPrefixOf` src ||
     (wikiHostNoWWW ++ wikiPrefix) `isPrefixOf` src ||
     (wikiHostNoWWW ++ "/wikiupload") `isPrefixOf` src =
@@ -320,7 +321,7 @@ handleLinksImages fs insubdir (Link lab (src,tit))
        return $ Link lab ('/':suff',"")
   | otherwise = return $ Link lab (src,tit)
 handleLinksImages fs insubdir (Image alt (src,tit))
-  | wikiBase `isPrefixOf` src ||
+  | (wikiHost ++ wikiPrefix) `isPrefixOf` src ||
     (wikiHost ++ "/wikiupload") `isPrefixOf` src ||
     (wikiHostNoWWW ++ wikiPrefix) `isPrefixOf` src ||
     (wikiHostNoWWW ++ "/wikiupload") `isPrefixOf` src =
