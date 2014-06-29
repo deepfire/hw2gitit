@@ -212,12 +212,12 @@ doPageVersion fs (page',page) version = do
   let html = renderTags body
   let doc' = bottomUp removeRawInlines   -- remove raw HTML
              $ bottomUp (handleHeaders . fixCodeBlocks . removeRawBlocks)
-             $ readHtml defaultParserState html
+             $ readHtml def html
   -- handle wikilinks and images
   let subdir = not $ null $ takeDirectory fname
   doc'' <- bottomUpM (handleLinksImages fs subdir) doc'
   let md = if null redir
-              then writeMarkdown defaultWriterOptions doc''
+              then writeMarkdown def doc''
               else "See [" ++ fromUrlString redir ++ "](" ++ '/':fromUrlString redir ++ ")."
   -- add header with categories
   putStrLn $ "Adding page " ++ page' ++ " r" ++ show (vId version)
@@ -349,7 +349,7 @@ addResource fs fname url = do
          addToWiki fs fname "hw2gitit" "Import from haskellwiki" raw
 
 -- remove numbering from headers.
-handleHeaders (Header lev xs) = Header lev xs'
+handleHeaders (Header lev a xs) = Header lev a xs'
   where xs' = dropWhile (==Space) $ dropWhile (== Str ".")
             $ dropWhile (==Space) $ dropWhile isNum xs
         isNum (Str ys) = all (\c -> isDigit c || c == '.') ys
