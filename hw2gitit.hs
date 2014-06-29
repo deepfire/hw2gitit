@@ -29,6 +29,7 @@ import System.FilePath
 import Data.IORef
 import System.IO.Unsafe
 import Network.HTTP.Conduit
+import System.IO
 
 data Version = Version { vId :: Integer
                        , vUser :: String
@@ -69,6 +70,7 @@ main = do
   let pagepairs = sort
         [(fromUrl p,p) | p <- pages, (fromUrl p ++ ".page") `notElem` ind]
   -- Add all pages to the repository, except those already there
+  printf "; total of %d pages\n" (length pagepairs)
   mapM_ (doPage fs) pagepairs
 
 openURL :: String -> IO String
@@ -84,10 +86,13 @@ openURL' url = do
   let cachename = cache ++ "/" ++ (showBSasHex $ hash SHA256 $ BC.pack url)
   createDirectoryIfMissing True cache
   cached <- doesFileExist cachename
+  printf "; ..trying %s.. " url
+  hFlush stdout
   src <- if cached then
             readFile cachename
           else
             openURL url
+  printf "len %d\n" $ length src
   unless cached $ writeFile cachename src
   return src
 
@@ -173,7 +178,6 @@ doPage fs (page',page) = do
            $ parseTags $ decodeString src
   let lis = partitions (~== TagOpen "li" []) tags
   let versions = sortBy (comparing vId) $ map toVersion lis
-  printf ";  %s %s\n%s\n" page pageHistoryUrl (show versions)
   -- let versions = [ Version {vId=1308, vUser="Ashley Y",vDate="23:54, 4 January 2006",vDescription = "Initial commit"}
   mapM_ (doPageVersion fs (page',page)) versions
 
@@ -181,8 +185,8 @@ doPageVersion :: FileStore -> (String,String) -> Version -> IO ()
 doPageVersion fs (page',page) version = do
   let fname = page' ++ ".page"
   -- first, check mediawiki source to make sure it's not a redirect page
-      pageVersionUrl = wikiHost ++ wPrefix ++ "/index.php?title=" ++ page ++ "&action=edit"
-  mwsrc <- openURL' pageVersionUrl
+      pageVersionIndexUrl = wikiHost ++ wPrefix ++ "/index.php?title=" ++ page ++ "&action=edit"
+  mwsrc <- openURL' pageVersionIndexUrl
   let redir = case (drop 1 $ dropWhile (~/= TagOpen "textarea" [("id","wpTextbox1")])
                            $ parseTags $ decodeString mwsrc) of
                   (TagText ('#':'r':'e':'d':'i':'r':'e':'c':'t':' ':'[':'[':xs):_) ->
@@ -192,12 +196,12 @@ doPageVersion fs (page',page) version = do
                   (TagText ('#':'R':'e':'d':'i':'r':'e':'c':'t':' ':'[':'[':xs):_) ->
                          takeWhile (/=']') xs
                   _ -> ""
-
+      pageVersionUrl = wikiHost ++ wPrefix ++ "/" ++ page ++
+                         if vId version > 0
+                         then "&oldid=" ++ printf "%06d" (vId version)
+                         else ""
   src <- if null redir
-            then openURL' $ wikiHost ++ wPrefix ++ "/" ++ page ++
-                    if vId version > 0
-                       then "?oldid=" ++ printf "%06d" (vId version)
-                       else ""
+            then openURL' pageVersionUrl
             else return ""
 
   -- convert the page
@@ -208,9 +212,11 @@ doPageVersion fs (page',page) version = do
   let tags = handleInlineCode    -- change inline code divs to code tags
              $ removeToc         -- remove TOC
              $ filter nonSpan    -- remove span tags
-             $ takeWhile (~/= TagComment " end content ")
+             $ tri'
+      tri' =   takeWhile (~/= TagComment " end content ")
              $ dropWhile (~/= TagComment " start content ")
-             $ parseTags
+             $ ped'
+      ped' =   parseTags
              $ decodeString src  -- decode UTF-8
   let (body,foot) = break (~== TagOpen "div" [("class","printfooter")]) tags
   let categories = getCategories  -- extract categories
@@ -225,12 +231,23 @@ doPageVersion fs (page',page) version = do
   let md = if null redir
               then writeMarkdown def doc''
               else "See [" ++ fromUrlString redir ++ "](" ++ '/':fromUrlString redir ++ ")."
+      desc = (printf "'%s' r%s, %d->%d" page' (show (vId version)) (length src) (length md)) :: String
+
+  if ((length md) == 0)
+  then fail $ printf "; 0-long markdown from mediawiki: %s\n\nped':\n%s\n\ntri':\n%s\n\ntags:\n%s\n\nhtml:\n%s\n\ndoc':\n%s\n\ndoc'':\n%s"
+                     desc
+                     (show ped')
+                     (show tri')
+                     (show tags)
+                     (show html)
+                     (show doc')
+                     (show doc'')
+  else (printf "; adding %s\n" desc)
+
   -- add header with categories
-  putStrLn $ "Adding page " ++ page' ++ " r" ++ show (vId version)
   let auth = vUser version
   let descr = vDescription version ++ " (#" ++ show (vId version) ++ ", " ++
                 vDate version ++ ")"
-  printf ";  %s %s %d - %s\n" page (show auth) (length src) pageVersionUrl
   addToWiki fs fname auth descr $
      (if null categories
          then ""
