@@ -213,8 +213,8 @@ doPageVersion fs (page',page) version = do
              $ removeToc         -- remove TOC
              $ filter nonSpan    -- remove span tags
              $ tri'
-      tri' =   takeWhile (~/= TagComment " end content ")
-             $ dropWhile (~/= TagComment " start content ")
+      tri' =   takeWhile (~/= TagComment " /bodycontent ")
+             $ dropWhile (~/= TagComment " bodycontent ")
              $ ped'
       ped' =   parseTags
              $ decodeString src  -- decode UTF-8
