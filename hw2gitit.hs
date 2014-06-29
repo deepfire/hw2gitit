@@ -234,15 +234,15 @@ doPageVersion fs (page',page) version = do
       desc = (printf "'%s' r%s, %d->%d" page' (show (vId version)) (length src) (length md)) :: String
 
   if ((length md) == 0)
-  then fail $ printf "; 0-long markdown from mediawiki: %s\n\nped':\n%s\n\ntri':\n%s\n\ntags:\n%s\n\nhtml:\n%s\n\ndoc':\n%s\n\ndoc'':\n%s"
-                     desc
-                     (show ped')
-                     (show tri')
-                     (show tags)
-                     (show html)
-                     (show doc')
-                     (show doc'')
-  else (printf "; adding %s\n" desc)
+  then printf "; WARNING: empty markdown from mediawiki: %s\n\nped':\n%s\n\ntri':\n%s\n\ntags:\n%s\n\nhtml:\n%s\n\ndoc':\n%s\n\ndoc'':\n%s\n"
+              desc
+              (show ped')
+              (show tri')
+              (show tags)
+              (show html)
+              (show doc')
+              (show doc'')
+  else printf "; adding %s\n" desc
 
   -- add header with categories
   let auth = vUser version
