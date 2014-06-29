@@ -39,6 +39,18 @@ cache = "cache"
 wiki :: FilePath
 wiki = "wiki"
 
+wikiHost :: String
+wikiHost = "https://www.nixos.org"
+
+wikiHostNoWWW :: String
+wikiHostNoWWW = "https://nixos.org"
+
+wikiPrefix :: String
+wikiPrefix = "/wiki"
+
+wikiBase :: String
+wikiBase = wikiHost ++ wikiPrefix
+
 -- a local list of resources that have been included,
 -- to speed things up
 resources :: IORef [String]
@@ -76,10 +88,10 @@ openURL' url = do
   return src
 
 indices :: [String]
-indices =  [ "http://www.haskell.org/haskellwiki/Special:Allpages/%24"
-           , "http://www.haskell.org/haskellwiki/Special:Allpages/G"
-           , "http://www.haskell.org/haskellwiki/Special:Allpages/L"
-           , "http://www.haskell.org/haskellwiki/Special:Allpages/U"
+indices =  [ wikiBase ++ "/Special:Allpages/%24"
+           , wikiBase ++ "/Special:Allpages/G"
+           , wikiBase ++ "/Special:Allpages/L"
+           , wikiBase ++ "/Special:Allpages/U"
            ]
 
 -- get list of pages listed on index URL
@@ -101,9 +113,9 @@ getPageNames :: [Tag String] -> [String]
 getPageNames [] = []
 getPageNames (t@(TagOpen "a" _) : ts) =
   case fromAttrib "href" t of
-       x | "/haskellwiki/index.php?title=" `isPrefixOf` x -> getPageNames ts
-         | "/haskellwiki/" `isPrefixOf` x ->
-                stripPref "/haskellwiki/" x : getPageNames ts
+       x | (wikiPrefix ++ "/index.php?title=") `isPrefixOf` x -> getPageNames ts
+         | (wikiPrefix ++ "/") `isPrefixOf` x ->
+                stripPref (wikiPrefix ++ "/") x : getPageNames ts
          | otherwise -> getPageNames ts
 getPageNames (t:ts) = getPageNames ts
 
@@ -150,7 +162,7 @@ toVersion ts =
 -- add it to the repository.
 doPage :: FileStore -> (String,String) -> IO ()
 doPage fs (page',page) = do
-  src <- openURL' $ "http://www.haskell.org/haskellwiki/index.php?title=" ++ page ++ "&limit=500&action=history"
+  src <- openURL' $ wikiBase ++ "/index.php?title=" ++ page ++ "&limit=500&action=history"
   let tags = takeWhile (~/= TagClose "ul")
            $ dropWhile (~/= TagOpen "ul" [("id","pagehistory")])
            $ parseTags $ decodeString src
@@ -164,7 +176,7 @@ doPageVersion fs (page',page) version = do
   let fname = page' ++ ".page"
 
   -- first, check mediawiki source to make sure it's not a redirect page
-  mwsrc <- openURL' $ "http://www.haskell.org/haskellwiki/index.php?title=" ++ page ++ "&action=edit"
+  mwsrc <- openURL' $ wikiBase ++ "/index.php?title=" ++ page ++ "&action=edit"
   let redir = case (drop 1 $ dropWhile (~/= TagOpen "textarea" [("id","wpTextbox1")])
                            $ parseTags $ decodeString mwsrc) of
                   (TagText ('#':'r':'e':'d':'i':'r':'e':'c':'t':' ':'[':'[':xs):_) ->
@@ -176,7 +188,7 @@ doPageVersion fs (page',page) version = do
                   _ -> ""
 
   src <- if null redir
-            then openURL' $ "http://www.haskell.org/haskellwiki/" ++ page ++
+            then openURL' $ wikiBase ++ "/" ++ page ++
                     if vId version > 0
                        then "?oldid=" ++ printf "%06d" (vId version)
                        else ""
@@ -279,20 +291,20 @@ handleInlineCode [] = []
 -- adding them to the repository.
 handleLinksImages :: FileStore -> Bool -> Inline -> IO Inline
 handleLinksImages fs insubdir (Link lab (src,tit))
-  | "http://www.haskell.org/haskellwiki" `isPrefixOf` src ||
-    "http://www.haskell.org/wikiupload" `isPrefixOf` src ||
-    "http://haskell.org/haskellwiki" `isPrefixOf` src ||
-    "http://haskell.org/wikiupload" `isPrefixOf` src =
-      let drop_prefix = stripPref "http://www.haskell.org" . stripPref "http://haskell.org"
+  | wikiBase `isPrefixOf` src ||
+    (wikiHost ++ "/wikiupload") `isPrefixOf` src ||
+    (wikiHostNoWWW ++ wikiPrefix) `isPrefixOf` src ||
+    (wikiHostNoWWW ++ "/wikiupload") `isPrefixOf` src =
+      let drop_prefix = stripPref wikiHost . stripPref wikiHostNoWWW
       in  handleLinksImages fs insubdir (Link lab (drop_prefix src, drop_prefix tit))
   | "/wikiupload/" `isPrefixOf` src = do  -- uploads like ps and pdf files
       let fname = "Upload/" ++ fromUrl (takeFileName src)
       addResource fs fname src
       return $ Link lab ('/':fname,"")
-  | "/haskellwiki/Image:" `isPrefixOf` src =
-      return $ Link lab ("/Image/" ++ fromUrl (stripPref "/haskellwiki/Image:" src),"")
-  | "/haskellwiki/" `isPrefixOf` src = do
-    let suff = fromUrl $ stripPref "/haskellwiki/" src
+  | (wikiPrefix ++ "/Image:") `isPrefixOf` src =
+      return $ Link lab ("/Image/" ++ fromUrl (stripPref (wikiPrefix ++ "Image:") src),"")
+  | wikiPrefix `isPrefixOf` src = do
+    let suff = fromUrl $ stripPref wikiPrefix src
     let suff' = if "Category:" `isPrefixOf` suff
                    then "_category/" ++ drop 9 suff
                    else suff
@@ -308,11 +320,11 @@ handleLinksImages fs insubdir (Link lab (src,tit))
        return $ Link lab ('/':suff',"")
   | otherwise = return $ Link lab (src,tit)
 handleLinksImages fs insubdir (Image alt (src,tit))
-  | "http://www.haskell.org/haskellwiki" `isPrefixOf` src ||
-    "http://www.haskell.org/wikiupload" `isPrefixOf` src ||
-    "http://haskell.org/haskellwiki" `isPrefixOf` src ||
-    "http://haskell.org/wikiupload" `isPrefixOf` src =
-      let drop_prefix = stripPref "http://www.haskell.org" . stripPref "http://haskell.org"
+  | wikiBase `isPrefixOf` src ||
+    (wikiHost ++ "/wikiupload") `isPrefixOf` src ||
+    (wikiHostNoWWW ++ wikiPrefix) `isPrefixOf` src ||
+    (wikiHostNoWWW ++ "/wikiupload") `isPrefixOf` src =
+      let drop_prefix = stripPref wikiHost . stripPref wikiHostNoWWW
       in  handleLinksImages fs insubdir (Image alt (drop_prefix src, drop_prefix tit))
     -- math images have tex source in alt attribute
   | "/wikiupload/math" `isPrefixOf` src =
@@ -331,7 +343,7 @@ addResource fs fname url = do
   unless (fname `elem` res) $ do
     catch (latest fs fname >> putStrLn ("Skipping " ++ fname)) $
       \(e :: FileStoreError) -> do
-         raw <- BC.pack `fmap` openURL' ("http://www.haskell.org" ++ url)
+         raw <- BC.pack `fmap` openURL' (wikiHost ++ url)
          putStrLn $ "Adding resource: " ++ fname
          modifyIORef resources (fname:)
          addToWiki fs fname "hw2gitit" "Import from haskellwiki" raw
